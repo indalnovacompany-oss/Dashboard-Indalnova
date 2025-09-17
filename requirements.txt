@@ -1,8 +1,0 @@
-flask
-supabase-py
-razorpay
-python-dotenv
-requests
-
-
-
