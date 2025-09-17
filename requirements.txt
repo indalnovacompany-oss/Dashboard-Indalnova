@@ -1,5 +1,6 @@
-supabase
+supabase-py
 razorpay
 requests
 python-dotenv
 vercel
+
