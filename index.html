@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,19 +59,21 @@
   <script>
     async function loadOrders() {
       try {
-        const res = await fetch("/api/orders");
-        const orders = await res.json();
+        // Call process_orders API
+        const res = await fetch("/api/process_orders");
+        const result = await res.json();
+        const orders = result.orders || []; // safe fallback
 
         const tbody = document.querySelector("#ordersTable tbody");
         tbody.innerHTML = "";
 
         orders.forEach(order => {
-          const fullAddress = `${order.address1 || ""}, ${order.address2 || ""}, ${order.city || ""}, ${order.state || ""}, ${order.pin || ""}`;
+          const fullAddress = `${order.address1 || ""}${order.address2 ? ", " + order.address2 : ""}, ${order.city || ""}, ${order.state || ""}, ${order.pin || ""}`;
 
           const row = document.createElement("tr");
           row.innerHTML = `
             <td>${order.order_id || order.id}</td>
-            <td>${order.products ? order.products.join(", ") : "-"}</td>
+            <td>${order.products?.join(", ") || "-"}</td>
             <td>${order.name || "-"}</td>
             <td>${order.phone || "-"}</td>
             <td>${fullAddress}</td>
@@ -79,7 +82,7 @@
               ${order.payment_status === 'paid' ? "✅ Paid" : "❌ Unpaid"}
             </td>
             <td>
-              <button onclick="printInvoice('${order.order_id}')">🧾 Print</button>
+              <button onclick="downloadInvoice('${order.order_id}')">🧾 Download</button>
             </td>
             <td>${order.created_at ? new Date(order.created_at).toLocaleString() : "-"}</td>
             <td class="tracking">${order.tracking_number || "-"}</td>
@@ -92,13 +95,28 @@
 
       } catch (err) {
         console.error("Error loading orders:", err);
+        alert("Failed to load orders. Check console for details.");
       }
     }
 
-    // 🧾 Print invoice
-    function printInvoice(orderId) {
-      alert(`🖨 Printing invoice for order ${orderId}`);
-      window.print();
+    // 🖨 Download invoice
+    async function downloadInvoice(orderId) {
+      try {
+        const res = await fetch(`/api/download_invoice/${orderId}`);
+        if (!res.ok) throw new Error("Invoice download failed");
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Invoice_${orderId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert("Error downloading invoice: " + err.message);
+      }
     }
 
     // ✔ Confirm order (frontend only for now)
@@ -106,14 +124,14 @@
       if (btn.classList.contains("confirmed")) return;
 
       if (confirm("Do you want to mark this order as Confirmed?")) {
-        // 🔹 Here later: call /api/confirm/${orderId}
+        // Here you can later call /api/confirm/:orderId
         btn.innerText = "✔ Confirmed";
         btn.classList.add("confirmed");
         btn.disabled = true;
       }
     }
 
-    // First load
+    // Initial load
     loadOrders();
   </script>
 </body>
