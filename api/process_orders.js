@@ -28,9 +28,9 @@ app.get("/api/process_orders", async (req, res) => {
 
     // 2️⃣ Validate orders
     for (const order of orders) {
-      const [isValid, reason] = validateOrder(order);
-      if (!isValid) {
-        console.log(`❌ Order ${order.order_id || order.id} skipped: ${reason}`);
+      const validation = validateOrder(order); // Corrected
+      if (!validation.valid) {
+        console.log(`❌ Order ${order.order_id || order.id} skipped: ${validation.reason}`);
         continue;
       }
 
@@ -46,7 +46,7 @@ app.get("/api/process_orders", async (req, res) => {
 
     // 4️⃣ Generate PDF invoices
     if (confirmedOrders.length > 0) {
-      generateInvoice(confirmedOrders);
+      generateInvoice(confirmedOrders); // Calls your invoice.js logic
 
       // 5️⃣ Mark orders as invoiced
       for (const order of confirmedOrders) {
