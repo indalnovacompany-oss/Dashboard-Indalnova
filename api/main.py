@@ -1,10 +1,11 @@
-# api/main.py
+
+# main.py
 import os
+from flask import Flask, jsonify
 from supabase import create_client
 from dotenv import load_dotenv
 import razorpay
-from invoice import generate_invoice  # make sure this file exists
-from vercel import Response
+from invoice import generate_invoice  # Make sure this file exists
 
 # --- Load environment variables ---
 load_dotenv()
@@ -17,6 +18,9 @@ RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 # --- Supabase & Razorpay clients ---
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+# --- Flask app ---
+app = Flask(__name__)
 
 # --- Fetch new orders ---
 def get_new_orders():
@@ -63,26 +67,21 @@ def validate_order(order):
         if not order.get(field):
             return False, f"Missing {field}"
 
-    # Phone validation
     phone = order['phone'].replace("+91", "").lstrip("0")
     if not phone.isdigit() or len(phone) != 10:
         return False, "Invalid phone"
 
-    # Quantity validation
     quantities = order['quantities']
     if not all(isinstance(q, int) and q >= 1 for q in quantities):
         return False, "Invalid quantity"
 
-    # Suspicious order check
     if any(q > 5 for q in quantities):
         return False, "Suspicious quantity"
 
-    # Total price check
     total_calc = sum(q * p for q, p in zip(order['quantities'], order['prices']))
     if total_calc != order['total']:
         return False, "Total mismatch"
 
-    # Address check
     if not order['address1'] or not order['pin']:
         return False, "Missing address/pin"
 
@@ -101,7 +100,6 @@ def process_orders(orders):
         if not is_valid:
             continue
 
-        # Payment check
         if order['payment_method'].lower() == "cod":
             confirmed_orders.append(order)
         else:
@@ -118,8 +116,14 @@ def process_orders(orders):
         "confirmed_orders": len(confirmed_orders)
     }
 
-# --- Vercel Serverless handler ---
-def handler(request):
+# --- Flask route ---
+@app.route("/api/process_orders", methods=["GET"])
+def process_orders_route():
     orders = get_new_orders()
     result = process_orders(orders)
-    return Response(result)
+    return jsonify(result)
+
+# --- Main entry point for Render ---
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
