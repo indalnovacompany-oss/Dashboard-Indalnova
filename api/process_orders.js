@@ -1,47 +1,55 @@
+// api/process_orders.js
+import express from "express";
+import dotenv from "dotenv";
+dotenv.config();
+
 import { supabase } from "../utils/supabaseClient.js";
-import { razorpay } from "../utils/razorpayClient.js";
 import { validateOrder } from "../utils/validateOrder.js";
 import { generateInvoice } from "../invoice/invoice.js";
 
-export default async function handler(req, res) {
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+const app = express();
+app.use(express.json());
 
+// -----------------
+// Process Orders API
+// -----------------
+app.get("/api/process_orders", async (req, res) => {
   try {
-    // 1️⃣ Fetch new orders
-    const { data: ordersData, error } = await supabase
+    // 1️⃣ Fetch new orders (invoice_generated = false)
+    const { data: orders = [], error } = await supabase
       .from("orders")
       .select("*")
       .eq("invoice_generated", false)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    const orders = ordersData || [];
 
     const confirmedOrders = [];
 
-    // 2️⃣ Validate & verify payment
-    for (let order of orders) {
-      const { valid, reason } = validateOrder(order);
-      if (!valid) continue;
+    // 2️⃣ Validate orders
+    for (const order of orders) {
+      const [isValid, reason] = validateOrder(order);
+      if (!isValid) {
+        console.log(`❌ Order ${order.order_id || order.id} skipped: ${reason}`);
+        continue;
+      }
 
-      if (order.payment_method.toLowerCase() === "cod") {
+      // 3️⃣ Payment check (for COD just confirm)
+      if (order.payment_method?.toLowerCase() === "cod") {
         confirmedOrders.push(order);
       } else if (order.payment_id) {
-        try {
-          const payment = await razorpay.payments.fetch(order.payment_id);
-          if (payment.status === "captured") confirmedOrders.push(order);
-        } catch (e) {
-          console.error(`Error verifying payment ${order.payment_id}:`, e.message);
-        }
+        // 🔹 Optional: verify Razorpay payment here
+        // For now, assume paid if payment_id exists
+        confirmedOrders.push(order);
       }
     }
 
-    // 3️⃣ Generate invoices
+    // 4️⃣ Generate PDF invoices
     if (confirmedOrders.length > 0) {
       generateInvoice(confirmedOrders);
 
-      // 4️⃣ Mark orders invoiced
-      for (let order of confirmedOrders) {
+      // 5️⃣ Mark orders as invoiced
+      for (const order of confirmedOrders) {
         await supabase
           .from("orders")
           .update({ invoice_generated: true })
@@ -49,13 +57,24 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({
+    // 6️⃣ Return result
+    res.json({
       total_orders: orders.length,
-      confirmed_orders: confirmedOrders.length
+      confirmed_orders: confirmedOrders.length,
+      orders
     });
 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
-}
+});
+
+// -----------------
+// Start server
+// -----------------
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`✅ Process Orders API running on port ${PORT}`);
+});
+
