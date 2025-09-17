@@ -1,4 +1,0 @@
-supabase
-razorpay
-requests
-python-dotenv
