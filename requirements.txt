@@ -1,0 +1,5 @@
+supabase
+razorpay
+requests
+python-dotenv
+vercel
