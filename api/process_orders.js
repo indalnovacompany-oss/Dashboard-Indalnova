@@ -23,9 +23,9 @@ app.get("/api/process_orders", async (req, res) => {
     const confirmedOrders = [];
 
     for (const order of orders) {
-      const validation = validateOrder(order);
-      if (!validation.valid) {
-        console.log(`❌ Order ${order.order_id || order.id} skipped: ${validation.reason}`);
+      const [isValid, reason] = validateOrder(order);
+      if (!isValid) {
+        console.log(`❌ Order ${order.order_id || order.id} skipped: ${reason}`);
         continue;
       }
 
@@ -34,35 +34,21 @@ app.get("/api/process_orders", async (req, res) => {
       }
     }
 
-    const uploadedFiles = [];
-
     if (confirmedOrders.length > 0) {
-      // Generate PDF invoices and upload to Supabase
-      await generateInvoice(confirmedOrders); // Make sure generateInvoice uploads to Supabase
+      await generateInvoice(confirmedOrders);
 
       for (const order of confirmedOrders) {
         await supabase
           .from("orders")
           .update({ invoice_generated: true })
           .eq("id", order.id);
-
-        const { data: publicData, error } = supabase.storage
-          .from("invoices")
-          .getPublicUrl(`Invoice_${order.order_id}.pdf`);
-
-        if (error) console.error(error);
-
-        uploadedFiles.push({
-          order_id: order.order_id,
-          invoice_url: publicData?.publicUrl || null
-        });
       }
     }
 
     res.json({
       total_orders: orders.length,
       confirmed_orders: confirmedOrders.length,
-      invoices: uploadedFiles
+      orders
     });
   } catch (err) {
     console.error(err);
