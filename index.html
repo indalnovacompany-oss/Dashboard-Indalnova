@@ -18,7 +18,6 @@
       font-size: 14px;
     }
     button:hover { background: #0056b3; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
     th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
     th { background: #f2f2f2; }
@@ -54,6 +53,7 @@
   </table>
 
   <script>
+    // ===== Local confirmation storage =====
     function getConfirmedOrdersFromLocal() {
       return JSON.parse(localStorage.getItem("confirmedOrders") || "[]");
     }
@@ -66,11 +66,40 @@
       }
     }
 
+    // ===== Validate and normalize order =====
+    function normalizeOrder(order) {
+      // Normalize simple fields
+      order.name = typeof order.name === "string" ? order.name : (order.name?.first ? `${order.name.first} ${order.name.last || ""}` : "-");
+      order.phone = typeof order.phone === "string" ? order.phone : (order.phone?.number || "-");
+      order.email = order.email || "-";
+      order.address1 = order.address1 || "";
+      order.address2 = order.address2 || "";
+      order.city = order.city || "";
+      order.state = order.state || "";
+      order.pin = order.pin || "";
+      order.total_price = Number(order.total_price || order.total || 0);
+
+      // Normalize product arrays
+      order.product_ids = (order.product_ids || []).map(p => typeof p === "string" ? p : p.id || "-");
+      order.quantities = (order.quantities || []).map(Number);
+      order.prices = (order.prices || []).map(Number);
+
+      // Normalize payment status
+      if (typeof order.payment_status === "boolean") {
+        order.payment_status = order.payment_status ? "paid" : "unpaid";
+      } else {
+        order.payment_status = (order.payment_status || "unpaid").toLowerCase();
+      }
+
+      return order;
+    }
+
+    // ===== Load Orders =====
     async function loadOrders() {
       try {
-        const res = await fetch("/api/process_orders");
+        const res = await fetch("/api/process_orders"); // your API
         const result = await res.json();
-        const orders = result.orders || [];
+        const orders = (result.orders || []).map(normalizeOrder);
 
         const tbody = document.querySelector("#ordersTable tbody");
         tbody.innerHTML = "";
@@ -78,31 +107,25 @@
         const confirmedLocal = getConfirmedOrdersFromLocal();
 
         orders.forEach(order => {
-          const fullAddress = `${order.address1 || ""}${order.address2 ? ", " + order.address2 : ""}, ${order.city || ""}, ${order.state || ""}, ${order.pin || ""}`;
+          const fullAddress = `${order.address1}${order.address2 ? ", " + order.address2 : ""}, ${order.city}, ${order.state}, ${order.pin}`;
           const isConfirmedLocal = confirmedLocal.includes(order.order_id);
 
           const row = document.createElement("tr");
           row.innerHTML = `
             <td>${order.order_id || order.id}</td>
             <td>${order.product_ids?.join(", ") || "-"}</td>
-            <td>${order.name || "-"}</td>
-            <td>${order.phone || "-"}</td>
+            <td>${order.name}</td>
+            <td>${order.phone}</td>
             <td>${fullAddress}</td>
-            <td>₹${order.total_price || order.total || 0}</td>
+            <td>₹${order.total_price.toFixed(2)}</td>
             <td class="${order.payment_status === 'paid' ? 'paid' : 'unpaid'}">
               ${order.payment_status === 'paid' ? "✅ Paid" : "❌ Unpaid"}
             </td>
             <td>
-              <button 
-                onclick="downloadInvoice('${order.invoice_url || ""}')" 
-                ${!order.invoice_url ? "disabled" : ""}>
-                🧾 Download
-              </button>
-              <button 
-                onclick="printInvoice('${order.invoice_url || ""}')" 
-                ${!order.invoice_url ? "disabled" : ""}>
-                🖨 Print
-              </button>
+              ${order.invoice_url
+                ? `<button onclick="downloadInvoice('${order.invoice_url}')">🧾 Download</button>
+                   <button onclick="printInvoice('${order.invoice_url}')">🖨 Print</button>`
+                : `<span>❌ Not Generated</span>`}
             </td>
             <td>${order.created_at ? new Date(order.created_at).toLocaleString() : "-"}</td>
             <td class="tracking">${order.tracking_number || "-"}</td>
@@ -123,6 +146,7 @@
       }
     }
 
+    // ===== Confirm Order =====
     function confirmOrder(btn, orderId) {
       if (btn.classList.contains("confirmed")) return;
       if (confirm("Do you want to mark this order as Confirmed?")) {
@@ -133,8 +157,8 @@
       }
     }
 
+    // ===== Download / Print =====
     function downloadInvoice(url) {
-      if (!url) return alert("Invoice not generated yet");
       const a = document.createElement("a");
       a.href = url;
       a.download = url.split("/").pop();
@@ -144,13 +168,14 @@
     }
 
     function printInvoice(url) {
-      if (!url) return alert("Invoice not generated yet");
       const printWindow = window.open(url, "_blank");
       printWindow.focus();
       printWindow.print();
     }
 
+    // Initial load
     loadOrders();
   </script>
 </body>
 </html>
+
