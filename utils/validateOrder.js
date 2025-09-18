@@ -1,4 +1,3 @@
-
 // utils/validateOrder.js
 
 export function validateOrder(order) {
@@ -8,7 +7,7 @@ export function validateOrder(order) {
     "products", "quantities", "prices", "total"
   ];
 
-  // Check all required fields
+  // ✅ Check required fields
   for (let field of requiredFields) {
     if (
       order[field] === undefined ||
@@ -16,36 +15,46 @@ export function validateOrder(order) {
       (Array.isArray(order[field]) && order[field].length === 0) ||
       (typeof order[field] === "string" && order[field].trim() === "")
     ) {
-      return { valid: false, reason: `Missing ${field}` };
+      return [false, `Missing ${field}`];
     }
   }
 
-  // Phone validation (Indian numbers)
+  // ✅ Products validation (must be array of IDs)
+  if (!Array.isArray(order.products) || order.products.length === 0) {
+    return [false, "Products must be a non-empty array"];
+  }
+
+  // ✅ Phone validation (Indian 10-digit numbers)
   const phone = order.phone.replace("+91", "").replace(/^0+/, "");
   if (!/^\d{10}$/.test(phone)) {
-    return { valid: false, reason: "Invalid phone" };
+    return [false, "Invalid phone"];
   }
 
-  // Quantities validation
+  // ✅ Quantities validation
   if (!Array.isArray(order.quantities) || !order.quantities.every(q => Number.isInteger(q) && q >= 1)) {
-    return { valid: false, reason: "Invalid quantity" };
+    return [false, "Invalid quantity"];
   }
 
-  // Suspicious quantity check
+  // 🚨 Suspicious quantity check
   if (order.quantities.some(q => q > 5)) {
-    return { valid: false, reason: "Suspicious quantity" };
+    return [false, "Suspicious quantity"];
   }
 
-  // Total price check
+  // ✅ Prices validation
+  if (!Array.isArray(order.prices) || !order.prices.every(p => typeof p === "number" && p > 0)) {
+    return [false, "Invalid prices"];
+  }
+
+  // ✅ Total price check
   const totalCalc = order.quantities.reduce((acc, q, i) => acc + q * order.prices[i], 0);
   if (totalCalc !== order.total) {
-    return { valid: false, reason: "Total mismatch" };
+    return [false, "Total mismatch"];
   }
 
-  // Address check
+  // ✅ Address check
   if (!order.address1 || !order.pin) {
-    return { valid: false, reason: "Missing address/pin" };
+    return [false, "Missing address/pin"];
   }
 
-  return { valid: true };
+  return [true];
 }
