@@ -24,6 +24,11 @@ export function validateOrder(order) {
     return [false, "Products must be a non-empty array"];
   }
 
+  // ✅ Ensure products, quantities, prices have same length
+  if (!(order.products.length === order.quantities.length && order.quantities.length === order.prices.length)) {
+    return [false, "Products, quantities, and prices length mismatch"];
+  }
+
   // ✅ Phone validation (Indian 10-digit numbers)
   const phone = order.phone.replace("+91", "").replace(/^0+/, "");
   if (!/^\d{10}$/.test(phone)) {
@@ -31,7 +36,7 @@ export function validateOrder(order) {
   }
 
   // ✅ Quantities validation
-  if (!Array.isArray(order.quantities) || !order.quantities.every(q => Number.isInteger(q) && q >= 1)) {
+  if (!order.quantities.every(q => Number.isInteger(q) && q >= 1)) {
     return [false, "Invalid quantity"];
   }
 
@@ -41,7 +46,7 @@ export function validateOrder(order) {
   }
 
   // ✅ Prices validation
-  if (!Array.isArray(order.prices) || !order.prices.every(p => typeof p === "number" && p > 0)) {
+  if (!order.prices.every(p => typeof p === "number" && p > 0)) {
     return [false, "Invalid prices"];
   }
 
@@ -56,5 +61,5 @@ export function validateOrder(order) {
     return [false, "Missing address/pin"];
   }
 
-  return [true];
+  return [true, null]; // ✅ Always return 2 values
 }
