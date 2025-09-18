@@ -4,7 +4,7 @@ import { supabase } from "../utils/supabaseClient.js";
 
 export async function generateInvoice(orders) {
   for (const order of orders) {
-    const doc = new PDFDocument({ size: "A4" });
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
     const chunks = [];
 
     doc.on("data", (chunk) => chunks.push(chunk));
@@ -26,62 +26,80 @@ export async function generateInvoice(orders) {
       }
     });
 
-    const pageHeight = 842;
-    const yTop = 50;
+    // ====== HEADER ======
+    doc.font("Helvetica-Bold").fontSize(20).fillColor("#333333").text("INDALNOVA", 50, 40);
+    doc.font("Helvetica").fontSize(10).fillColor("#555555")
+      .text("123H PATEL NAGAR, RAMADEVI, KANPUR, UTTAR PRADESH - 208007", 50, 65)
+      .text("Email: teamindalnova@gmail.com | Phone: +91-8840393051", 50, 80);
 
-    // Company Header
-    doc.font("Helvetica-Bold").fontSize(16).text("Indalnova", 50, yTop);
-    doc.font("Helvetica").fontSize(9)
-      .text("123H PATEL NAGAR RAMADEVI KANPUR UTTARPRADESH, Pin-208007", 50, yTop + 20)
-      .text("Email: teamindalnova@gmail.com | Phone: +91-8840393051", 50, yTop + 35);
+    // Invoice info box
+    doc.rect(400, 50, 150, 50).stroke();
+    doc.font("Helvetica-Bold").fontSize(14).fillColor("#333333").text("INVOICE", 410, 55);
+    doc.font("Helvetica").fontSize(9).fillColor("#555555")
+      .text(`Invoice Date: ${new Date().toLocaleDateString()}`, 410, 75)
+      .text(`Order ID: ${order.order_id}`, 410, 90);
 
-    // Invoice Info
-    doc.font("Helvetica-Bold").fontSize(14).text("INVOICE", 400, yTop);
-    doc.font("Helvetica").fontSize(9)
-      .text(`Invoice Date: ${new Date().toLocaleDateString()}`, 400, yTop + 20)
-      .text(`Order ID: ${order.order_id}`, 400, yTop + 35);
+    // ====== CUSTOMER INFO ======
+    doc.font("Helvetica-Bold").fontSize(12).fillColor("#333333").text("Bill To:", 50, 120);
+    doc.font("Helvetica").fontSize(10).fillColor("#555555")
+      .text(order.name, 50, 135)
+      .text(order.email, 50, 150)
+      .text(order.phone, 50, 165)
+      .text(`${order.address1} ${order.address2 || ""}, ${order.city}, ${order.state} - ${order.pin}`, 50, 180, { width: 300 });
 
-    // Customer Info
-    doc.font("Helvetica-Bold").fontSize(12).text("Bill To:", 50, yTop + 60);
-    doc.font("Helvetica").fontSize(9)
-      .text(`Name: ${order.name}`, 50, yTop + 75)
-      .text(`Email: ${order.email}`, 50, yTop + 90)
-      .text(`Phone: ${order.phone}`, 50, yTop + 105)
-      .text(`Address: ${order.address1} ${order.address2 || ""}, ${order.city}, ${order.state} - ${order.pin}`, 50, yTop + 120);
+    // ====== PRODUCTS TABLE ======
+    const tableTop = 220;
+    const tableLeft = 50;
+    const tableWidth = 500;
 
-    // Products Table (only product IDs)
-    const tableTop = yTop + 150;
-    doc.font("Helvetica-Bold").text("Product ID", 50, tableTop);
-    doc.text("Qty", 150, tableTop);
-    doc.text("Price (₹)", 200, tableTop);
-    doc.text("Total (₹)", 280, tableTop);
+    // Draw table headers
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#333333");
+    doc.text("Product ID", tableLeft, tableTop, { width: 100 });
+    doc.text("Qty", tableLeft + 110, tableTop, { width: 50, align: "center" });
+    doc.text("Price (₹)", tableLeft + 170, tableTop, { width: 70, align: "center" });
+    doc.text("Total (₹)", tableLeft + 250, tableTop, { width: 70, align: "center" });
 
-    let rowY = tableTop + 20;
-    doc.font("Helvetica").fontSize(9);
+    doc.moveTo(tableLeft, tableTop + 15)
+       .lineTo(tableLeft + tableWidth, tableTop + 15)
+       .strokeColor("#aaaaaa")
+       .stroke();
 
-    // ✅ Safety check
+    // Table rows
+    let rowY = tableTop + 25;
     const productIds = order.product_ids || [];
     const quantities = (order.quantities || []).map(Number);
     const prices = (order.prices || []).map(Number);
 
+    doc.font("Helvetica").fontSize(10).fillColor("#555555");
     productIds.forEach((pid, i) => {
       const qty = quantities[i] || 0;
       const price = prices[i] || 0;
-      doc.text(pid.toString(), 50, rowY);
-      doc.text(qty.toString(), 150, rowY, { width: 40, align: "center" });
-      doc.text(price.toString(), 200, rowY, { width: 60, align: "center" });
-      doc.text((qty * price).toString(), 280, rowY, { width: 60, align: "center" });
+      doc.text(pid.toString(), tableLeft, rowY, { width: 100 });
+      doc.text(qty.toString(), tableLeft + 110, rowY, { width: 50, align: "center" });
+      doc.text(price.toFixed(2), tableLeft + 170, rowY, { width: 70, align: "center" });
+      doc.text((qty * price).toFixed(2), tableLeft + 250, rowY, { width: 70, align: "center" });
       rowY += 20;
     });
 
     // Total Row
-    doc.font("Helvetica-Bold").text("TOTAL", 200, rowY);
-    doc.text(Number(order.total_price).toString(), 280, rowY);
+    doc.moveTo(tableLeft, rowY + 5)
+       .lineTo(tableLeft + tableWidth, rowY + 5)
+       .strokeColor("#aaaaaa")
+       .stroke();
 
-    doc.font("Helvetica").fontSize(9)
-      .text(`Payment Method: ${order.payment_method}`, 50, rowY + 30)
-      .text(`Payment ID: ${order.payment_id || ""}`, 200, rowY + 30);
+    doc.font("Helvetica-Bold").text("TOTAL", tableLeft + 170, rowY + 10, { width: 70, align: "center" });
+    doc.text(Number(order.total_price).toFixed(2), tableLeft + 250, rowY + 10, { width: 70, align: "center" });
+
+    // Payment info
+    doc.font("Helvetica").fontSize(10).fillColor("#555555");
+    doc.text(`Payment Method: ${order.payment_method}`, tableLeft, rowY + 40);
+    doc.text(`Payment ID: ${order.payment_id || ""}`, tableLeft + 200, rowY + 40);
+
+    // Footer
+    doc.fontSize(9).fillColor("#999999")
+      .text("Thank you for your business!", 50, 780, { align: "center", width: 500 });
 
     doc.end();
   }
 }
+
