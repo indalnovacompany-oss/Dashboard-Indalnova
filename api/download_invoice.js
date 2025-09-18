@@ -1,35 +1,41 @@
 // api/download_invoice.js
 import express from "express";
-import { generateInvoice } from "../invoice/invoice.js";
 import { supabase } from "../utils/supabaseClient.js";
+import { generateInvoice } from "../invoice/invoice.js";
 
-const router = express.Router();
+const app = express();
 
-router.get("/api/download_invoice/:orderId", async (req, res) => {
+app.get("/api/download_invoice/:orderId", async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // Fetch order from Supabase
+    // 1️⃣ Fetch the order from Supabase
     const { data: orders, error } = await supabase
       .from("orders")
       .select("*")
       .eq("order_id", orderId)
-      .single();
+      .limit(1);
 
-    if (error || !orders) return res.status(404).send("Order not found");
+    if (error) throw error;
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
 
-    // Generate PDF
-    const pdfBuffer = await generateInvoice(orders);
+    const order = orders[0];
 
-    // Send PDF to browser
+    // 2️⃣ Generate PDF buffer
+    const pdfBuffer = await generateInvoice([order], { returnBuffer: true });
+
+    // 3️⃣ Send PDF as response
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=Invoice_${orderId}.pdf`);
     res.send(pdfBuffer);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Error generating invoice");
+    console.error("❌ Invoice error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-export default router;
+export default app;
+
