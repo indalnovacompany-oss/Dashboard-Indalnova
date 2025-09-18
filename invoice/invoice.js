@@ -59,10 +59,14 @@ export async function generateInvoice(orders) {
     let rowY = tableTop + 20;
     doc.font("Helvetica").fontSize(9);
 
-    // ✅ Use order.products instead of order.product_id
-    order.products.forEach((pid, i) => {
-      const qty = order.quantities[i];
-      const price = order.prices[i];
+    // ✅ Safety check
+    const productIds = order.product_ids || [];
+    const quantities = (order.quantities || []).map(Number);
+    const prices = (order.prices || []).map(Number);
+
+    productIds.forEach((pid, i) => {
+      const qty = quantities[i] || 0;
+      const price = prices[i] || 0;
       doc.text(pid.toString(), 50, rowY);
       doc.text(qty.toString(), 150, rowY, { width: 40, align: "center" });
       doc.text(price.toString(), 200, rowY, { width: 60, align: "center" });
@@ -70,8 +74,9 @@ export async function generateInvoice(orders) {
       rowY += 20;
     });
 
+    // Total Row
     doc.font("Helvetica-Bold").text("TOTAL", 200, rowY);
-    doc.text(order.total.toString(), 280, rowY);
+    doc.text(Number(order.total_price).toString(), 280, rowY);
 
     doc.font("Helvetica").fontSize(9)
       .text(`Payment Method: ${order.payment_method}`, 50, rowY + 30)
