@@ -1,3 +1,4 @@
+// api/process_orders.js
 import express from "express";
 import dotenv from "dotenv";
 dotenv.config();
@@ -33,26 +34,27 @@ app.get("/api/process_orders", async (req, res) => {
       }
     }
 
-    let uploadedFiles = [];
+    const uploadedFiles = [];
 
     if (confirmedOrders.length > 0) {
-      await generateInvoice(confirmedOrders);
+      // Generate PDF invoices and upload to Supabase
+      await generateInvoice(confirmedOrders); // Make sure generateInvoice uploads to Supabase
 
-      // Mark orders as invoiced and get public URL
       for (const order of confirmedOrders) {
         await supabase
           .from("orders")
           .update({ invoice_generated: true })
           .eq("id", order.id);
 
-        const { publicUrl, error } = supabase.storage
+        const { data: publicData, error } = supabase.storage
           .from("invoices")
           .getPublicUrl(`Invoice_${order.order_id}.pdf`);
 
         if (error) console.error(error);
+
         uploadedFiles.push({
           order_id: order.order_id,
-          invoice_url: publicUrl
+          invoice_url: publicData?.publicUrl || null
         });
       }
     }
