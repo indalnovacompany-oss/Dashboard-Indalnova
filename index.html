@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Orders Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #fafafa; }
+    h1 { margin-bottom: 15px; }
+    button {
+      background: #007bff;
+      color: white;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 2px;
+      font-size: 14px;
+    }
+    button:hover { background: #0056b3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    th { background: #f2f2f2; }
+    tr:hover { background: #f9f9f9; }
+    .paid { color: green; font-weight: bold; }
+    .unpaid { color: red; font-weight: bold; }
+    .tracking { color: purple; font-weight: bold; }
+    .confirm-btn { background: orange; }
+    .confirm-btn.confirmed {
+      background: green !important;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <h1>📦 Orders Dashboard</h1>
+  <button onclick="loadOrders()">🔄 Refresh</button>
+
+  <table id="ordersTable">
+    <thead>
+      <tr>
+        <th>Order ID</th>
+        <th>Product ID(s)</th>
+        <th>Name</th>
+        <th>Phone</th>
+        <th>Address</th>
+        <th>Total</th>
+        <th>Payment</th>
+        <th>Invoice</th>
+        <th>Date</th>
+        <th>Tracking</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    function getConfirmedOrdersFromLocal() {
+      return JSON.parse(localStorage.getItem("confirmedOrders") || "[]");
+    }
+
+    function saveConfirmedOrderToLocal(orderId) {
+      const confirmedOrders = getConfirmedOrdersFromLocal();
+      if (!confirmedOrders.includes(orderId)) {
+        confirmedOrders.push(orderId);
+        localStorage.setItem("confirmedOrders", JSON.stringify(confirmedOrders));
+      }
+    }
+
+    async function loadOrders() {
+      try {
+        const res = await fetch("/api/process_orders");
+        const result = await res.json();
+        const orders = result.orders || [];
+
+        const tbody = document.querySelector("#ordersTable tbody");
+        tbody.innerHTML = "";
+
+        const confirmedLocal = getConfirmedOrdersFromLocal();
+
+        orders.forEach(order => {
+          const fullAddress = `${order.address1 || ""}${order.address2 ? ", " + order.address2 : ""}, ${order.city || ""}, ${order.state || ""}, ${order.pin || ""}`;
+
+          const row = document.createElement("tr");
+
+          const isConfirmedLocal = confirmedLocal.includes(order.order_id);
+
+          row.innerHTML = `
+            <td>${order.order_id || order.id}</td>
+            <td>${order.products?.join(", ") || "-"}</td>
+            <td>${order.name || "-"}</td>
+            <td>${order.phone || "-"}</td>
+            <td>${fullAddress}</td>
+            <td>₹${order.total || 0}</td>
+            <td class="${order.payment_status === 'paid' ? 'paid' : 'unpaid'}">
+              ${order.payment_status === 'paid' ? "✅ Paid" : "❌ Unpaid"}
+            </td>
+            <td>
+              ${order.invoice_url
+                ? `<a href="${order.invoice_url}" target="_blank"><button>🧾 Download</button></a>`
+                : `<span>❌ Not Generated</span>`}
+            </td>
+            <td>${order.created_at ? new Date(order.created_at).toLocaleString() : "-"}</td>
+            <td class="tracking">${order.tracking_number || "-"}</td>
+            <td>
+              <button class="confirm-btn ${isConfirmedLocal ? "confirmed" : ""}" 
+                      ${isConfirmedLocal ? "disabled" : ""}
+                      onclick="confirmOrder(this, '${order.order_id}')">
+                ${isConfirmedLocal ? "✔ Confirmed" : "✔ Confirm"}
+              </button>
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+
+      } catch (err) {
+        console.error("Error loading orders:", err);
+        alert("Failed to load orders. Check console for details.");
+      }
+    }
+
+    function confirmOrder(btn, orderId) {
+      if (btn.classList.contains("confirmed")) return;
+
+      if (confirm("Do you want to mark this order as Confirmed?")) {
+        btn.innerText = "✔ Confirmed";
+        btn.classList.add("confirmed");
+        btn.disabled = true;
+
+        saveConfirmedOrderToLocal(orderId);
+      }
+    }
+
+    // Initial load
+    loadOrders();
+  </script>
+</body>
+</html>
