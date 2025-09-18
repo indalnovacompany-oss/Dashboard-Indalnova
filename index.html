@@ -82,30 +82,36 @@
         orders.forEach(order => {
           const fullAddress = `${order.address1 || ""}${order.address2 ? ", " + order.address2 : ""}, ${order.city || ""}, ${order.state || ""}, ${order.pin || ""}`;
 
-          const row = document.createElement("tr");
+          // Fix types
+          order.product_ids = Array.isArray(order.product_ids) ? order.product_ids : [];
+          order.quantities = Array.isArray(order.quantities) ? order.quantities.map(q => Number(q)) : [];
+          order.prices = Array.isArray(order.prices) ? order.prices.map(p => Number(p)) : [];
+          order.total_price = Number(order.total_price) || 0;
 
+          const row = document.createElement("tr");
           const isConfirmedLocal = confirmedLocal.includes(order.order_id);
 
           row.innerHTML = `
             <td>${order.order_id || order.id}</td>
-            <td>${order.products?.join(", ") || "-"}</td>
+            <td>${order.product_ids.join(", ") || "-"}</td>
             <td>${order.name || "-"}</td>
             <td>${order.phone || "-"}</td>
             <td>${fullAddress}</td>
-            <td>₹${order.total || 0}</td>
+            <td>₹${order.total_price}</td>
             <td class="${order.payment_status === 'paid' ? 'paid' : 'unpaid'}">
               ${order.payment_status === 'paid' ? "✅ Paid" : "❌ Unpaid"}
             </td>
             <td>
               ${order.invoice_url
-                ? `<a href="${order.invoice_url}" target="_blank"><button>🧾 Download</button></a>`
+                ? `<a href="${order.invoice_url}" target="_blank"><button>🧾 Download</button></a>
+                   <button onclick="printInvoice('${order.invoice_url}')">🖨 Print</button>`
                 : `<span>❌ Not Generated</span>`}
             </td>
             <td>${order.created_at ? new Date(order.created_at).toLocaleString() : "-"}</td>
             <td class="tracking">${order.tracking_number || "-"}</td>
             <td>
               <button class="confirm-btn ${isConfirmedLocal ? "confirmed" : ""}" 
-                      ${isConfirmedLocal ? "disabled" : ""}
+                      ${isConfirmedLocal ? "disabled" : ""} 
                       onclick="confirmOrder(this, '${order.order_id}')">
                 ${isConfirmedLocal ? "✔ Confirmed" : "✔ Confirm"}
               </button>
@@ -122,14 +128,18 @@
 
     function confirmOrder(btn, orderId) {
       if (btn.classList.contains("confirmed")) return;
-
       if (confirm("Do you want to mark this order as Confirmed?")) {
         btn.innerText = "✔ Confirmed";
         btn.classList.add("confirmed");
         btn.disabled = true;
-
         saveConfirmedOrderToLocal(orderId);
       }
+    }
+
+    function printInvoice(url) {
+      const printWindow = window.open(url, "_blank");
+      printWindow.focus();
+      printWindow.print();
     }
 
     // Initial load
