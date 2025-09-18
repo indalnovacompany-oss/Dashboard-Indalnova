@@ -1,7 +1,4 @@
-// utils/validateOrder.js
-
 export function validateOrder(order) {
-  // ✅ Required fields
   const requiredFields = [
     "order_id",
     "name",
@@ -14,10 +11,9 @@ export function validateOrder(order) {
     "product_ids",
     "quantities",
     "prices",
-    "total"
+    "total_price" // match DB
   ];
 
-  // ✅ Check all required fields
   for (let field of requiredFields) {
     if (
       order[field] === undefined ||
@@ -29,40 +25,38 @@ export function validateOrder(order) {
     }
   }
 
-  // ✅ Ensure product_ids, quantities, and prices arrays match in length
+  // Convert strings to numbers if needed
+  const quantities = order.quantities.map(q => Number(q));
+  const prices = order.prices.map(p => Number(p));
+  const total = Number(order.total_price);
+
+  // Ensure lengths match
   if (
-    !Array.isArray(order.product_ids) ||
-    !Array.isArray(order.quantities) ||
-    !Array.isArray(order.prices) ||
-    order.product_ids.length !== order.quantities.length ||
-    order.quantities.length !== order.prices.length
+    order.product_ids.length !== quantities.length ||
+    quantities.length !== prices.length
   ) {
     return [false, "product_ids, quantities, and prices length mismatch"];
   }
 
-  // ✅ Validate phone (Indian 10-digit)
+  // Phone validation
   const phone = order.phone.replace("+91", "").replace(/^0+/, "");
   if (!/^\d{10}$/.test(phone)) return [false, "Invalid phone"];
 
-  // ✅ Validate quantities
-  if (!order.quantities.every(q => Number.isInteger(q) && q >= 1)) {
-    return [false, "Invalid quantity"];
-  }
+  // Quantities validation
+  if (!quantities.every(q => Number.isInteger(q) && q >= 1)) return [false, "Invalid quantity"];
 
-  // 🚨 Suspicious quantity check
-  if (order.quantities.some(q => q > 5)) return [false, "Suspicious quantity"];
+  // Suspicious quantity
+  if (quantities.some(q => q > 5)) return [false, "Suspicious quantity"];
 
-  // ✅ Validate prices
-  if (!order.prices.every(p => typeof p === "number" && p > 0)) {
-    return [false, "Invalid prices"];
-  }
+  // Prices validation
+  if (!prices.every(p => typeof p === "number" && p > 0)) return [false, "Invalid prices"];
 
-  // ✅ Validate total price
-  const totalCalc = order.quantities.reduce((acc, q, i) => acc + q * order.prices[i], 0);
-  if (totalCalc !== Number(order.total)) return [false, "Total mismatch"];
+  // Total price check
+  const totalCalc = quantities.reduce((acc, q, i) => acc + q * prices[i], 0);
+  if (totalCalc !== total) return [false, "Total mismatch"];
 
-  // ✅ Address validation
+  // Address check
   if (!order.address1 || !order.pin) return [false, "Missing address/pin"];
 
-  return [true, null]; // ✅ Valid order
+  return [true, null];
 }
