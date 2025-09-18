@@ -10,12 +10,13 @@ import { generateInvoice } from "../invoice/invoice.js";
 const app = express();
 app.use(express.json());
 
-// -----------------
-// Process Orders API
-// -----------------
+/**
+ * -------------------------
+ * 1️⃣ Process Orders API
+ * -------------------------
+ */
 app.get("/api/process_orders", async (req, res) => {
   try {
-    // 1️⃣ Fetch new orders (invoice_generated = false)
     const { data: orders = [], error } = await supabase
       .from("orders")
       .select("*")
@@ -26,29 +27,25 @@ app.get("/api/process_orders", async (req, res) => {
 
     const confirmedOrders = [];
 
-    // 2️⃣ Validate orders
     for (const order of orders) {
-      const validation = validateOrder(order); // Corrected
+      const validation = validateOrder(order);
       if (!validation.valid) {
         console.log(`❌ Order ${order.order_id || order.id} skipped: ${validation.reason}`);
         continue;
       }
 
-      // 3️⃣ Payment check (for COD just confirm)
       if (order.payment_method?.toLowerCase() === "cod") {
         confirmedOrders.push(order);
       } else if (order.payment_id) {
-        // 🔹 Optional: verify Razorpay payment here
-        // For now, assume paid if payment_id exists
         confirmedOrders.push(order);
       }
     }
 
-    // 4️⃣ Generate PDF invoices
     if (confirmedOrders.length > 0) {
-      generateInvoice(confirmedOrders); // Calls your invoice.js logic
+      // Generate invoices for confirmed orders
+      await generateInvoice(confirmedOrders);
 
-      // 5️⃣ Mark orders as invoiced
+      // Mark as invoiced
       for (const order of confirmedOrders) {
         await supabase
           .from("orders")
@@ -57,7 +54,6 @@ app.get("/api/process_orders", async (req, res) => {
       }
     }
 
-    // 6️⃣ Return result
     res.json({
       total_orders: orders.length,
       confirmed_orders: confirmedOrders.length,
@@ -70,11 +66,48 @@ app.get("/api/process_orders", async (req, res) => {
   }
 });
 
+/**
+ * ------------------------------
+ * 2️⃣ Download Invoice API
+ * ------------------------------
+ */
+app.get("/api/download_invoice/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const { data: orders, error } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("order_id", orderId)
+      .limit(1);
+
+    if (error) throw error;
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orders[0];
+
+    // Generate PDF as Buffer
+    const pdfBuffer = await generateInvoice([order], { returnBuffer: true });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Invoice_${orderId}.pdf`);
+    res.send(pdfBuffer);
+
+  } catch (err) {
+    console.error("❌ Invoice error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // -----------------
 // Start server
 // -----------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`✅ Process Orders API running on port ${PORT}`);
+  console.log(`✅ API running on port ${PORT}`);
 });
+
+export default app;
 
